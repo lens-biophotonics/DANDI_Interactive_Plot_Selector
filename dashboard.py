@@ -7,7 +7,7 @@ import pandas as pd
 # bokeh
 from bokeh.plotting import figure, show
 from bokeh.models import ColumnDataSource, TapTool, CustomJS, HoverTool
-from bokeh.io import output_notebook, output_file
+from bokeh.io import output_file
 from bokeh.transform import factor_cmap
 from bokeh.palettes import Category20, Category10
 # pickle
@@ -246,6 +246,7 @@ def generate_plot(data, title, save_path, interactive=True):
     # Define the output file where the plot will be saved (HTML format).
     output_file(save_path)
 
+    show(p)
 
 
 
@@ -306,14 +307,6 @@ def main():
     ##################### Variables
 
     # Creating esstential directories
-    # directory to save pickle objects
-    object_dict = "./objs"
-    # create directory
-    try:
-        os.mkdir(object_dict)
-    except:
-        print(f"Note: {object_dict} to store pickle objects already exist.")
-
     # plots directory
     plots_dict = "./plots"
     # Create the directory 
@@ -332,24 +325,12 @@ def main():
     # Getting the dataset from the dandi server
     dandi_dataset = dandi_api.get_dandiset(dandi_set)
 
-    # Saving the dandi_dataset object
-    with open(f'{object_dict}/dandiset.pkl', 'wb') as file:
-        pickle.dump(dandi_dataset, file)
-
-
     ##################### 1. Data Gathering
 
     print("Gathering Data.")
 
-    # Load the dandiset object from the saved file
-    with open(f'{object_dict}/dandiset.pkl', 'rb') as file:
-        dandi_dataset = pickle.load(file)
-
     # data gathering
     df, assets = assets_to_df(dandi_dataset)
-    # Saving the gathered data
-    with open(f'{object_dict}/rawData.pkl', 'wb') as file:
-        pickle.dump((df, assets), file)
 
     print("\t\t1/7 Done!")
 
@@ -357,10 +338,6 @@ def main():
     ##################### 2. Generating Modality X Subject Plot
 
     print("Generating Modality X Subject Plot.")
-
-    # Load the gathered data from the saved file
-    with open(f'{object_dict}/rawData.pkl', 'rb') as file:
-        df, assets = pickle.load(file)
 
     # Specify the modalities 
     selected_modalities = ["STER", "SPIM", "OCT"]
@@ -394,7 +371,7 @@ def main():
     print("Refining to SPIM Data with ome.zarr Extensions.")
 
     # Refining the data
-    df_refined = df[(df['modality'].isin(["SPIM"])) & (df['extension']=='ome.zarr')]
+    df_refined = df[(df['modality'].isin(["SPIM"])) & (df['extension']=='ome.zarr')].copy()
     # Only taking the sub, sample, stain and modality columns
     df_refined = df_refined[['sub', 'sample', 'stain', 'modality']]
 
@@ -411,10 +388,6 @@ def main():
     # get the url for each row based on the index from the assests dataset
     df_aaws['url'] = [assets[i].get_content_url(regex='s3') for i in df_aaws.index]
 
-    # Saving the final dataset
-    with open(f'{object_dict}/df_aaws.pkl', 'wb') as file:
-        pickle.dump(df_aaws, file)
-
     print("\t\t4/7 Done!")
 
     
@@ -422,21 +395,11 @@ def main():
 
     print("Generating the Neuroglancer URL")
 
-    # Load the df_aaws data from the saved file
-    with open(f'{object_dict}/df_aaws.pkl', 'rb') as file:
-        df_aaws = pickle.load(file)
-
-
     # sort based on sub 
     df_final = df_aaws.sort_values(by='sub')
 
-
     # generate the url
     df_final['url'] = df_final.apply(lambda row: get_ng_url(row['sub'], row['sample'], row['stain'], row['modality'], row['url']), axis=1)
-
-    # Saving the dandi_dataset object
-    with open(f'{object_dict}/df_final.pkl', 'wb') as file:
-        pickle.dump(df_final, file)
 
     print("\t\t5/7 Done!")
 
@@ -444,10 +407,6 @@ def main():
     ##################### 6. Generating Stain X Sample Interactive Plots
 
     print("Generating Stain X Sample Interactive Plots")
-
-    # Load the df_final data from the saved file
-    with open(f'{object_dict}/df_final.pkl', 'rb') as file:
-        df_final = pickle.load(file)
 
     # getting all subs
     subs = df_final['sub'].unique()
