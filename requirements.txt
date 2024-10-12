@@ -1,0 +1,6 @@
+wheel
+ipykernel
+dandi
+pandas
+bokeh
+jinja2
