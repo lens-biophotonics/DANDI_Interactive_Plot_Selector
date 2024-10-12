@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Plot Selector</title>
+
+    <!-- Load Select2 for searchable dropdown -->
+    <!-- Load the CSS and JavaScript for the Select2 library, which enhances the dropdown with search functionality -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <style>
+        /* Basic styling for the body */
+        body {
+            font-family: Arial, sans-serif; /* Set a simple, readable font */
+            background-color: white;        /* Set the background color to white */
+            text-align: center;             /* Center all content within the body */
+            padding: 50px;                  /* Add padding around the body content */
+        }
+
+        /* Styling for the heading */
+        h2 {
+            color: #333;  /* Set the heading text color to dark gray */
+        }
+
+        /* Styling for the dropdown container */
+        .dropdown {
+            margin: 20px;  /* Add margin around the dropdown */
+        }
+
+        /* Styling for the select dropdown itself */
+        select {
+            padding: 10px;            /* Add padding inside the dropdown */
+            font-size: 16px;          /* Increase font size for readability */
+            border-radius: 5px;       /* Add rounded corners to the dropdown */
+            border: 1px solid #ccc;   /* Add a light gray border */
+            width: 300px;             /* Set a fixed width for the dropdown */
+        }
+
+        /* Styling for the area where the plot iframe will be displayed */
+        #plot-area {
+            margin-top: 40px;          /* Add spacing above the plot */
+            text-align: center;        /* Center the plot within its container */
+            display: flex;             /* Use flexbox to manage layout */
+            justify-content: center;   /* Center the plot horizontally */
+        }
+
+        /* Styling for the iframe that will display the plot */
+        iframe {
+            width: 90%;                /* Make the iframe take up 90% of the available width */
+            height: 600px;             /* Set the height of the iframe */
+            max-width: 1200px;         /* Set a maximum width for larger screens */
+            border: none;              /* Remove the default iframe border */
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Heading to guide the user on what to do -->
+    <h2>Select a SPIM Sub to View the Interactive Plot</h2>
+
+    <!-- Dropdown container for selecting a 'sub' -->
+    <div class="dropdown">
+        <!-- Dropdown menu where users can select a 'sub' -->
+        <select id="sub-selector">
+            <option value="">Select Sub</option>  <!-- Default option shown initially -->
+            
+            <!-- Jinja2 template loop to dynamically generate the options in the dropdown -->
+            <!-- For each (sub, location) pair in the 'subs' dictionary, an option is created -->
+            {% for sub, location in subs.items() %}
+                <option value="{{ location }}">{{ sub }}</option>
+            {% endfor %}
+            <!-- Each option will have the value as the URL (location) and display the 'sub' name -->
+        </select>
+    </div>
+
+    <!-- Container where the plot will be loaded dynamically -->
+    <div id="plot-area">
+        <!-- Initially empty; the iframe will be inserted here dynamically based on the user's selection -->
+    </div>
+
+    <script>
+        // Initialize Select2 for searchable dropdown
+        $(document).ready(function() {
+            // Convert the standard HTML select element into a Select2 dropdown with search functionality
+            $('#sub-selector').select2({
+                placeholder: "Select a Sub",  /* Set the placeholder text */
+                allowClear: true  /* Allow the user to clear their selection */
+            });
+        });
+
+        // Function to dynamically load the selected plot into the iframe
+        $('#sub-selector').on('change', function() {
+            var selectedSub = $(this).val();  // Get the value of the selected option (URL of the plot)
+            
+            if (selectedSub) {  // If a sub was selected
+                // Dynamically insert an iframe into the plot-area div, setting the source to the selectedSub URL
+                document.getElementById('plot-area').innerHTML = `<iframe src="${selectedSub}" frameborder="0"></iframe>`;
+            } else {
+                // If no sub is selected, clear the plot area
+                document.getElementById('plot-area').innerHTML = '';
+            }
+        });
+    </script>
+
+</body>
+</html>
