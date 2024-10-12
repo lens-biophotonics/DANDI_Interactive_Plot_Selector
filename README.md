@@ -1,5 +1,10 @@
 # DANDI_Interactive_Plot_Selector
-Contains python script (also jupyter notebook) to create DANDI Interactive Plot Selector HTML page.
+This repo contains a python script and also a jupyter notebook that creates a Interactive Plot Selector HTML page for DANDI dataset.
+
+<div style="text-align: center;">
+    <img src="./imgs/DANDI_interactive_plot_selector.png" alt="Screenshot Interactive Plot Selector HTML page" width="300"/>
+</div>
+
 
 
 
