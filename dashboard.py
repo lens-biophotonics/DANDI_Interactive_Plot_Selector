@@ -253,49 +253,151 @@ def generate_plot(data, title, save_path, interactive=True):
 ######################## Section: 5. Generating the Neuroglancer URL ########################
 
 
-def get_ng_url(sub, sample, stain, modality, url):
+def build_url(layers, base_url):
     """
-    Generate a Neuroglancer URL with the given parameters to visualize the data.
-
+    Helper function to build the Neuroglancer URL from a list of layers.
+    Each layer represents one stain (or dataset) in the visualization.
+    
     Parameters:
-    sub (str): Subject identifier.
-    sample (str): Sample identifier.
-    stain (str): Stain identifier.
-    modality (str): Modality identifier.
-    url (str): The URL to the Zarr dataset.
-
+    layers (list): A list of layer dictionaries, each defining one stain's configuration.
     Returns:
-    str: A complete Neuroglancer URL to visualize the dataset.
+    str: A fully constructed Neuroglancer URL with encoded layer configurations.
     """
-
-    # Create the Neuroglancer layer configuration
-    layer = {
-        "type": "image",  # Define the layer type as 'image'
-        "source": f"zarr://{url}",  # Source of the layer, using the Zarr format from the given URL
-        "tab": "rendering",  # Specify the tab in Neuroglancer (rendering tab)
-        "shaderControls": {"normalized": {"range": [0,1250]}},  # Shader controls for brightness/contrast range
-        "name": f"{sub}-{sample}-{stain}-{modality}"  # Create a descriptive name for the layer based on input parameters
-    }
-
-    # Neuroglancer base URL for constructing the final visualization link
-    base_url = "https://neuroglancer-demo.appspot.com/#!"
-
-    # Configuration for Neuroglancer, including dimensions, layers, and layout
+    # Define the configuration for the Neuroglancer viewer
     config = {
         "dimensions": {
-            "z": [0.0000036, "m"],  # Z dimension with a resolution scale in meters
-            "y": [0.0000036, "m"],  # Y dimension with a resolution scale in meters
-            "x": [0.0000036, "m"]   # X dimension with a resolution scale in meters
+            "z": [0.0000036, "m"],  # Z dimension scale (in meters per voxel)
+            "y": [0.0000036, "m"],  # Y dimension scale
+            "x": [0.0000036, "m"]   # X dimension scale
         },
-        "layers": [layer],  # Add the layer configuration defined above
-        "layout": 'yz',  # Layout of the visualization (in this case, along the yz-plane)
+        "layers": layers,  # All layers to be visualized (one or more)
+        "layout": 'yz',    # Layout of the view (along the YZ plane)
     }
+    return base_url + quote(json.dumps(config))
 
-    # Convert the configuration to a JSON string and encode it as part of the URL
-    ng_url = base_url + quote(json.dumps(config))
 
-    # Return the full Neuroglancer URL
-    return ng_url
+def get_rgb_priority_palette(num_colors):
+    """
+    Return a color palette with RGB colors (Red, Green, Blue) as the first three colors,
+    followed by colors from Bokeh's Category20 palette for any additional stains.
+
+    Parameters:
+    num_colors (int): Number of distinct colors required.
+
+    Returns:
+    list: A list of hex color codes, starting with Red, Green, and Blue.
+    """
+    # RGB colors (Red, Green, Blue)
+    rgb_colors = ["#FF0000", "#00FF00", "#0000FF"]  # Red, Green, Blue
+
+    # Use remaining colors from Category20, if needed
+    if num_colors <= 3:
+        return rgb_colors[:num_colors]  # Only need RGB colors
+    else:
+        # Combine RGB colors with Category20 for more than 3 stains
+        return rgb_colors + list(Category20[20][:3-num_colors])  # Use remaining colors from Category20
+    
+
+def assign_shader(color, contrast_multiplier, intensity_multiplier):
+    """
+    Generate a GLSL shader to emit a specific color for a given stain, with increased intensity and contrast adjustment.
+    
+    Parameters:
+    color (str): The hex code of the color (e.g., '#ff5733').
+    contrast_multiplier (float): A factor to adjust contrast (brightness scaling).
+    intensity_multiplier (float): A factor to adjust color intensity.
+    
+    Returns:
+    str: A GLSL shader that maps the intensity values to the given color with increased intensity.
+    """
+    return f"""
+    void main() {{
+        float intensity = toNormalized(getDataValue()) * {contrast_multiplier};  // Adjust contrast
+        emitRGB(vec3({int(color[1:3], 16) / 255.0}, {int(color[3:5], 16) / 255.0}, {int(color[5:], 16) / 255.0}) * intensity * {intensity_multiplier});
+    }}
+    """
+
+
+def get_ng_urls(df, contrast_multiplier=2.0, intensity_multiplier=1.5):
+    """
+    Generate Neuroglancer URLs for each stain and update the 'url' column
+    with an overlap link that visualizes all stains together for each sub-sample pair.
+    Each stain will be assigned a specific color using GLSL shaders with increased intensity.
+
+    Parameters:
+    df (pandas.DataFrame): A DataFrame with columns 'sub', 'sample', 'stain', 'modality', and 'url'.
+        - 'sub': Subject identifier (e.g., I48, I55).
+        - 'sample': Sample identifier for the subject (e.g., Sample02).
+        - 'stain': Stain type used in imaging (e.g., NeuN, Nissl).
+        - 'modality': Imaging modality used (e.g., SPIM).
+        - 'url': The base URL pointing to the Zarr dataset for this subject-sample-stain combination.
+    contrast_multiplier (float): A factor to adjust contrast (brightness scaling) for the stains.
+    intensity_multiplier (float): A factor to adjust the color intensity in the shaders.
+
+    Returns:
+    pandas.DataFrame: The modified DataFrame with the 'url' column updated
+                      to contain both individual and overlap Neuroglancer URLs with specific color assignment.
+    """
+    
+    # Neuroglancer base URL for constructing the visualization link
+    base_url = "https://neuroglancer-demo.appspot.com/#!"
+
+    # List to store all rows for the final DataFrame, including overlap rows
+    final_rows = []
+
+    # Iterate over groups of (sub, sample) to generate both individual and overlap URLs
+    for (sub, sample), group in df.groupby(['sub', 'sample']):
+        # For each stain in the current (sub, sample) group, generate individual URLs
+        for _, row in group.iterrows():
+            # Define the layer configuration for this stain
+            layer = {
+                "type": "image",  # Layer type is image (since we are visualizing images)
+                "source": f"zarr://{row['url']}",  # Use the Zarr URL as the data source
+                "tab": "rendering",  # Specify the tab in Neuroglancer (rendering tab)
+                "shaderControls": {"normalized": {"range": [0, 2000]}},  # Adjust range for brightness
+                "name": f"{row['sub']}-{row['sample']}-{row['stain']}-{row['modality']}"  # Layer name
+            }
+            # Build the URL for this individual stain layer
+            url = build_url([layer], base_url)
+            # Append the row to the final output, but update the 'url' with the generated Neuroglancer URL
+            final_rows.append({
+                "sub": row['sub'],        # Subject identifier
+                "sample": row['sample'],  # Sample identifier
+                "stain": row['stain'],    # Stain type
+                "modality": row['modality'],  # Imaging modality
+                "url": url                # Updated with generated Neuroglancer URL
+            })
+        
+        # Generate a list of distinct colors for each stain in the group
+        colors = get_rgb_priority_palette(len(group))
+        
+        # After individual URLs, create the overlap URL for this (sub, sample) group
+        layers = []  # List to store layers for all stains in this sample
+        for i, (_, row) in enumerate(group.iterrows()):
+            # Create a layer for each stain in the current (sub, sample) group, with a distinct color shader
+            layer = {
+                "type": "image",  # Layer type is image
+                "source": f"zarr://{row['url']}",  # Zarr URL for the data source
+                "tab": "rendering",  # Specify rendering tab
+                "shader": assign_shader(colors[i], contrast_multiplier, intensity_multiplier),  # Assign the stain to a specific color shader
+                "name": f"{row['sub']}-{row['sample']}-{row['stain']}-{row['modality']}"  # Layer name
+            }
+            layers.append(layer)  # Add this layer to the list of layers
+
+        # Build the overlap URL that combines all layers for this (sub, sample)
+        overlap_url = build_url(layers, base_url)
+
+        # Append a new row for the overlap visualization (indicating it in 'stain' as 'OVERLAP')
+        final_rows.append({
+            "sub": sub,           # Subject identifier
+            "sample": sample,     # Sample identifier
+            "stain": "OVERLAP",   # Special label to indicate this is an overlap URL
+            "modality": group['modality'].iloc[0],  # Get the modality (same for all in this group)
+            "url": overlap_url    # Update the 'url' field with the overlap URL
+        })
+
+    # Convert the list of rows into a DataFrame and return
+    return pd.DataFrame(final_rows)
 
 
 
@@ -398,8 +500,8 @@ def main():
     # sort based on sub 
     df_final = df_aaws.sort_values(by='sub')
 
-    # generate the url
-    df_final['url'] = df_final.apply(lambda row: get_ng_url(row['sub'], row['sample'], row['stain'], row['modality'], row['url']), axis=1)
+    # Generate the individual and overlap NeuroGlancer URLs
+    df_final = get_ng_urls(df_final, contrast_multiplier=100.0, intensity_multiplier=1.0)
 
     print("\t\t5/7 Done!")
 
