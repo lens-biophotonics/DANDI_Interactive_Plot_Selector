@@ -91,7 +91,7 @@ python3 dashboard.py
 
 3. Run the cells, play around and enjoy!
 
-> Note: The `dashboard.ipynb` creates an additional folder `./objs`, which contains *pickle* objects as checkpoint files. This allows users to avoid reloading or filtering the data repeatedly when testing during later stages of the notebook.
+> Note: The `dashboard.ipynb` creates an additional folder `./objs` along with `DANDI_interactive_plot_selector.html` and `./plots`, which contains *pickle* objects as checkpoint files. This allows users to avoid reloading or filtering the data repeatedly when testing during later stages of the notebook.
 
 
 
