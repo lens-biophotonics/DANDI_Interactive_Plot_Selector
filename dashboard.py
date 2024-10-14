@@ -271,6 +271,7 @@ def build_url(layers, base_url):
             "x": [0.0000036, "m"]   # X dimension scale
         },
         "layers": layers,  # All layers to be visualized (one or more)
+        "gpuMemoryLimit": 5000000000, # This sets the GPU memory limit to 5GB
         "layout": 'yz',    # Layout of the view (along the YZ plane)
     }
     return base_url + quote(json.dumps(config))
@@ -300,20 +301,28 @@ def get_rgb_priority_palette(num_colors):
 
 def assign_shader(color, contrast_multiplier, intensity_multiplier):
     """
-    Generate a GLSL shader to emit a specific color for a given stain, with increased intensity and contrast adjustment.
+    Generate a GLSL shader with built-in brightness control, contrast multiplier, and intensity multiplier.
     
     Parameters:
-    color (str): The hex code of the color (e.g., '#ff5733').
-    contrast_multiplier (float): A factor to adjust contrast (brightness scaling).
-    intensity_multiplier (float): A factor to adjust color intensity.
-    
+    color (str): The hex color of the stain (e.g., '#ff5733').
+    contrast_multiplier (float): Multiplier to adjust contrast of the intensity values.
+    intensity_multiplier (float): Multiplier to adjust overall intensity of the RGB color.
+
     Returns:
-    str: A GLSL shader that maps the intensity values to the given color with increased intensity.
+    str: A GLSL shader string with built-in brightness control (no external parameter).
     """
     return f"""
+    #uicontrol float brightness slider(min=0.0, max=100.0, default=50.0)  // Brightness control UI
     void main() {{
+        // Normalize the data and adjust by contrast and brightness multipliers
         float intensity = toNormalized(getDataValue()) * {contrast_multiplier};  // Adjust contrast
-        emitRGB(vec3({int(color[1:3], 16) / 255.0}, {int(color[3:5], 16) / 255.0}, {int(color[5:], 16) / 255.0}) * intensity * {intensity_multiplier});
+        float brightness_adjusted = intensity * (brightness / 50.0);  // Brightness adjustment, scaled around default 50
+        
+        // Define the RGB color based on the given hex color and apply intensity and brightness
+        vec3 result = vec3({int(color[1:3], 16) / 255.0}, {int(color[3:5], 16) / 255.0}, {int(color[5:], 16) / 255.0}) * brightness_adjusted * {intensity_multiplier};
+        
+        // Emit the final RGB color
+        emitRGB(result);
     }}
     """
 
