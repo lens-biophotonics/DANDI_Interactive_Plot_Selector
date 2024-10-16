@@ -400,7 +400,7 @@ def get_ng_urls(df, contrast_multiplier=2.0, intensity_multiplier=1.5):
         final_rows.append({
             "sub": sub,           # Subject identifier
             "sample": sample,     # Sample identifier
-            "stain": "OVERLAP",   # Special label to indicate this is an overlap URL
+            "stain": "Overlap",   # Special label to indicate this is an overlap URL
             "modality": group['modality'].iloc[0],  # Get the modality (same for all in this group)
             "url": overlap_url    # Update the 'url' field with the overlap URL
         })
@@ -530,11 +530,20 @@ def main():
     # for every sub
     for sub_name in subs:
         # get all the rows of that particular sub, for example I48
-        df_sub = df_final[(df_final['sub'] == sub_name)]
+        df_sub = df_final[(df_final['sub'] == sub_name)].copy()
 
         # sort the data on the bases of sample and each sample on the 
-        # bases of stain
-        df_sub = df_sub.sort_values(by = ['sample', 'stain'], ascending=[True, True])
+        # bases of stain however have 'Overlap' at the top.
+        # Get unique stain values excluding 'Overlap' and then sort them
+        unique_stains = sorted(df_sub['stain'].unique())
+        if 'Overlap' in unique_stains:
+            unique_stains.remove('Overlap')
+
+        # Define 'overlap' as the top priority for the 'stain' column
+        df_sub['stain'] = pd.Categorical(df_sub['stain'], categories=['Overlap']+unique_stains , ordered=True)
+
+        # Now sort by 'sample' and 'stain'
+        df_sub = df_sub.sort_values(by=['sample', 'stain'], ascending=[True, False])
 
         # create the title for the plot
         title = f"{sub_name} - Stain x Sample"
